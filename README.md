@@ -8,7 +8,12 @@ Yarn is a FastAPI backend service that provides text-to-video retrieval capabili
 - Frame extraction using scene detection
 - Embedding generation using CLIP
 - Query processing using GPT-4o
-- Image generation using DALL-E
+- Multiple image generation models:
+  - Stable Diffusion via Replicate API (default)
+  - DALL-E via OpenAI API
+- Two frame generation modes:
+  - Independent: each frame generated separately
+  - Continuous: frames generated as a coherent sequence
 - Dynamic Time Warping (DTW) for comparing query and video embeddings
 - REST API for searching videos by text query
 - Debug mode for logging queries, frame descriptions, and generated images
@@ -25,10 +30,18 @@ pip install -r requirements.txt
 3. Create a `.env` file with the following variables:
 
 ```
-OPENAI_API_KEY=your_openai_api_key
+# OpenAI API key (required for GPT-4o frame descriptions and DALL-E if selected)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Replicate API token (required for Stable Diffusion if selected)
+REPLICATE_API_TOKEN=your_replicate_api_token_here
+
+# Video directory and search defaults
 VIDEO_DIRECTORY=./videos
 MAX_FRAMES_DEFAULT=5
 TOP_K_DEFAULT=3
+
+# Debug settings
 DEBUG_MODE=false
 DEBUG_LOG_DIR=./logs/debug
 DEBUG_FRAMES_DIR=./logs/frames
@@ -51,8 +64,33 @@ python run.py
 5. Test the API using the provided test client:
 
 ```bash
-python test_client.py --query "A person walking on the beach" --max-frames 5 --top-k 3
+# Using Stable Diffusion (default) and independent frame generation
+python test_client.py --query "A person walking on the beach"
+
+# Using DALL-E for image generation
+python test_client.py --query "A person walking on the beach" --image-model dalle
+
+# Using continuous frame generation mode for more coherent sequences
+python test_client.py --query "A person walking on the beach" --frame-mode continuous
 ```
+
+## Foundation Models
+
+Yarn implements a flexible foundation model framework that allows you to choose different models for various tasks:
+
+### Image Generation Models
+
+- **Stable Diffusion** (default): Uses Replicate API to generate images
+  - Independent mode: Uses standard image generation
+  - Continuous mode: Uses inpainting to maintain visual consistency
+
+- **DALL-E**: Uses OpenAI API to generate images
+  - Independent mode: Uses DALL-E 3 for high-quality images
+  - Continuous mode: Uses DALL-E 2's edit capabilities for consistency
+
+### Embedding Models
+
+- **CLIP**: OpenAI's Contrastive Language-Image Pre-training model for generating embeddings from images
 
 ## API Endpoints
 
@@ -67,7 +105,10 @@ Request body:
 {
   "query": "A person running on the beach at sunset",
   "max_frames": 5,
-  "top_k": 3
+  "top_k": 3,
+  "frame_mode": "independent",
+  "image_model": "sd",
+  "embedding_model": "clip"
 }
 ```
 
@@ -92,14 +133,32 @@ Response:
 ]
 ```
 
+## Frame Generation Modes
+
+Yarn supports two modes for generating frames from a query:
+
+### Independent Mode (Default)
+
+In this mode, each frame is generated independently based on its description. This gives the model maximum freedom to interpret each description without constraints from previous frames.
+
+### Continuous Mode
+
+In this mode, frames are generated sequentially, with each frame using the previous frame as a reference:
+
+- **Stable Diffusion**: Uses inpainting to maintain consistent elements while updating others
+- **DALL-E**: Uses DALL-E 2's image editing capabilities to maintain consistency
+
+This creates a more coherent sequence of frames with consistent characters, settings, colors, and visual style throughout the sequence.
+
 ## Debug Mode
 
 Yarn includes a debug mode that logs detailed information about each search query, including:
 
-1. The original query text
+1. The original query text and parameters
 2. Generated frame descriptions
 3. Generated images for each frame description
 4. Search results
+5. Foundation models used
 
 To enable debug mode, set the `DEBUG_MODE` environment variable to `true` in your `.env` file:
 
@@ -114,19 +173,13 @@ Debug logs will be saved to:
 - `./logs/frames/[session_id]/frame_##_*.jpg` - Generated images
 - `./logs/frames/[session_id]/metadata.json` - Image metadata
 
-Each search query creates a new session with a unique ID (timestamp), making it easy to correlate logs and images.
+## Extending with New Models
 
-## How It Works
+Yarn's architecture is designed to be easily extended with new foundation models:
 
-1. **Video Indexing**: On startup, the system processes all videos in the specified directory, extracting key frames and generating embeddings.
-
-2. **Query Processing**: When a user submits a text query, the system uses GPT-4o to generate descriptive frames from the query.
-
-3. **Image Generation**: DALL-E generates visual representations based on the frame descriptions.
-
-4. **Embedding Comparison**: The system generates embeddings for the generated images and compares them to the video embeddings using Dynamic Time Warping (DTW).
-
-5. **Result Ranking**: Videos are ranked by similarity score, and the top-k results are returned.
+1. **Add a new model enum** in `app/models/video.py`
+2. **Implement the model class** in `app/services/foundation_models.py` by extending the appropriate abstract base class
+3. **Register the model** in the `ModelFactory` class
 
 ## Requirements
 
@@ -136,4 +189,5 @@ Each search query creates a new session with a unique ID (timestamp), making it 
 - PyTorch
 - Transformers (CLIP)
 - OpenAI API access
+- Replicate API access
 - CUDA-capable GPU (recommended but not required)

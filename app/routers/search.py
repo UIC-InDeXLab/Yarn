@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 
-from app.models.video import SearchQuery, SearchResult
+from app.models.video import SearchQuery, SearchResult, FrameGenerationMode, ImageGenerationModel, EmbeddingModel
 from app.services.video_service import VideoService
 
 router = APIRouter(
@@ -23,7 +23,12 @@ async def search_videos(
     Search for videos matching the query text
     
     Args:
-        query: Search query with optional parameters max_frames and top_k
+        query: Search query with optional parameters:
+            - max_frames: Maximum number of frames to generate (default: 5)
+            - top_k: Number of results to return (default: 3)
+            - frame_mode: Frame generation mode (independent or continuous)
+            - image_model: Image generation model (dalle or sd)
+            - embedding_model: Embedding model (clip)
         video_service: Video service instance
         
     Returns:
@@ -41,7 +46,10 @@ async def search_videos(
     results = await video_service.search_videos(
         query.query, 
         max_frames=query.max_frames,
-        top_k=query.top_k
+        top_k=query.top_k,
+        frame_mode=query.frame_mode,
+        image_model=query.image_model,
+        embedding_model=query.embedding_model
     )
     
     return results

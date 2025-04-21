@@ -1,15 +1,14 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image
-import io
-import os
-from openai import OpenAI
 import torch
 from transformers import CLIPProcessor, CLIPModel
 
-from app.utils.config import DEBUG_MODE
+from app.models.video import FrameGenerationMode, ImageGenerationModel, EmbeddingModel
+from app.utils.config import DEBUG_MODE, OPENAI_API_KEY
 from app.utils.debug import DebugLogger
+from app.services.foundation_models import ModelFactory, ImageGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class EmbedderService:
         return cls._instance
     
     def _init_services(self):
-        """Initialize the embedding model and OpenAI client"""
+        """Initialize models"""
         # Initialize CLIP model for embeddings
         try:
             self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -35,18 +34,10 @@ class EmbedderService:
             logger.error(f"Error loading CLIP model: {str(e)}")
             self.clip_model = None
             self.clip_processor = None
-        
-        # Initialize OpenAI client
-        try:
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                logger.warning("OPENAI_API_KEY not found in environment variables")
-            
-            self.openai_client = OpenAI(api_key=api_key)
-            logger.info("OpenAI client initialized")
-        except Exception as e:
-            logger.error(f"Error initializing OpenAI client: {str(e)}")
-            self.openai_client = None
+    
+    def get_image_generator(self, model_type: ImageGenerationModel) -> ImageGenerator:
+        """Get an image generator based on the model type"""
+        return ModelFactory.create_image_generator(model_type)
     
     async def embed_images(self, images: List[Any]) -> List[np.ndarray]:
         """
@@ -116,28 +107,31 @@ class EmbedderService:
         Returns:
             List of frame descriptions
         """
-        if not self.openai_client:
-            logger.error("OpenAI client not initialized")
+        from openai import OpenAI
+        
+        if not OPENAI_API_KEY:
+            logger.error("OPENAI_API_KEY not set")
             return [f"Frame description {i+1} for {query}" for i in range(max_frames)]
         
         try:
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            
             system_prompt = (
-                "You are an expert storyboard artist. Your task is to convert a text query into a "
-                "sequence of visual frames that capture the essence of the query. "
-                "Each frame should be described in detail so it can be visualized clearly."
+                "You are an expert at creating concise, visual descriptions for frames that will be used "
+                "to find matching videos. Focus only on key visual elements directly related to the query. "
+                "Do not add unnecessary details or interpret beyond what's explicitly in the query."
             )
             
             user_prompt = (
-                f"Convert the following query into a sequence of {max_frames} or fewer visual frames "
-                f"that best represent this concept. For each frame, provide a detailed description that "
-                f"could be used to generate an image. Focus on visual elements, composition, lighting, "
-                f"and mood. The descriptions should be cohesive and flow naturally from one to the next.\n\n"
+                f"Convert the following query into a sequence of {max_frames} or fewer visual frames. "
+                f"Each frame should capture essential visual elements only. "
+                f"Be precise and focus solely on elements explicitly mentioned in the query. "
+                f"Avoid adding invented details that aren't directly implied by the query.\n\n"
                 f"Query: {query}\n\n"
-                f"Format your response as a numbered list of frame descriptions, with one description per frame. "
-                f"Do not include any explanations or notes - just the numbered frames and their descriptions."
+                f"Format your response as a numbered list of frame descriptions, with one description per frame."
             )
             
-            response = self.openai_client.chat.completions.create(
+            response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -182,53 +176,37 @@ class EmbedderService:
             logger.error(f"Error generating frame descriptions: {str(e)}")
             return [f"Frame description {i+1} for {query}" for i in range(max_frames)]
     
-    async def generate_images_from_descriptions(self, descriptions: List[str], session_id: str = "") -> List[np.ndarray]:
+    async def generate_images_from_descriptions(
+        self, 
+        descriptions: List[str], 
+        mode: FrameGenerationMode = FrameGenerationMode.INDEPENDENT,
+        model_type: ImageGenerationModel = ImageGenerationModel.STABLE_DIFFUSION,
+        session_id: str = ""
+    ) -> List[np.ndarray]:
         """
-        Generate images from frame descriptions using DALL-E
+        Generate images from frame descriptions
         
         Args:
             descriptions: List of frame descriptions
+            mode: Frame generation mode (independent or continuous)
+            model_type: Image generation model to use
             session_id: Debug session ID (for logging)
             
         Returns:
             List of generated images as numpy arrays
         """
-        if not self.openai_client:
-            logger.error("OpenAI client not initialized")
-            # Return dummy images
-            return [np.zeros((512, 512, 3), dtype=np.uint8) for _ in descriptions]
+        if not descriptions:
+            logger.warning("No descriptions provided for image generation")
+            return []
         
-        generated_images = []
+        # Get the appropriate image generator
+        image_generator = self.get_image_generator(model_type)
         
-        for desc in descriptions:
-            try:
-                response = self.openai_client.images.generate(
-                    model="dall-e-3",
-                    prompt=desc,
-                    size="1024x1024",
-                    quality="standard",
-                    n=1,
-                    response_format="b64_json"
-                )
-                
-                # Decode base64 image
-                import base64
-                image_data = base64.b64decode(response.data[0].b64_json)
-                
-                # Convert to PIL Image and then to numpy array
-                image = Image.open(io.BytesIO(image_data)).convert("RGB")
-                image_array = np.array(image)
-                
-                generated_images.append(image_array)
-                logger.info(f"Generated image for description: {desc[:50]}...")
-                
-            except Exception as e:
-                logger.error(f"Error generating image for description: {desc[:50]}...: {str(e)}")
-                # Add a dummy image
-                generated_images.append(np.zeros((1024, 1024, 3), dtype=np.uint8))
+        # Generate images
+        images = await image_generator.generate_batch(descriptions, mode)
         
         # Save generated images in debug mode
-        if DEBUG_MODE and session_id and descriptions:
-            DebugLogger.save_generated_frames(session_id, generated_images, descriptions)
+        if DEBUG_MODE and session_id and images:
+            DebugLogger.save_generated_frames(session_id, images, descriptions, model_type.value)
             
-        return generated_images
+        return images

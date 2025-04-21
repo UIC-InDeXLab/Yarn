@@ -13,3 +13,5 @@ python-dotenv
 pydantic
 fastdtw
 tqdm
+replicate
+requests

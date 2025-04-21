@@ -26,6 +26,13 @@ DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() in ["true", "1", "yes"]
 DEBUG_LOG_DIR = os.getenv("DEBUG_LOG_DIR", "./logs/debug")
 DEBUG_FRAMES_DIR = os.getenv("DEBUG_FRAMES_DIR", "./logs/frames")
 
+# OpenAI API settings
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# Replicate API settings
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
+# Stable Diffusion inpainting model
+
 # Ensure debug directories exist if debug mode is enabled
 if DEBUG_MODE:
     os.makedirs(DEBUG_LOG_DIR, exist_ok=True)
@@ -33,7 +40,7 @@ if DEBUG_MODE:
     logging.info(f"Debug mode enabled. Logs will be saved to {DEBUG_LOG_DIR}")
 
 # Check for required environment variables
-required_env_vars = ["OPENAI_API_KEY"]
+required_env_vars = ["OPENAI_API_KEY", "REPLICATE_API_TOKEN"]
 
 for var in required_env_vars:
     if not os.getenv(var):

@@ -6,3 +6,6 @@
 logs/**
 volumes/**
 /needlectl/dist/
+data/**
+datasets_info/**
+videos/**

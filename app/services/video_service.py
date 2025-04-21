@@ -8,7 +8,7 @@ from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 
 from app.services.embedder_service import EmbedderService
-from app.models.video import Video, VideoFrame
+from app.models.video import Video, VideoFrame, FrameGenerationMode, ImageGenerationModel, EmbeddingModel
 from app.utils.config import DEBUG_MODE
 from app.utils.debug import DebugLogger
 
@@ -145,9 +145,28 @@ class VideoService:
         
         return frames
     
-    async def search_videos(self, query: str, max_frames: int = 5, top_k: int = 3) -> List[Dict]:
+    async def search_videos(
+        self, 
+        query: str, 
+        max_frames: int = 5, 
+        top_k: int = 3,
+        frame_mode: FrameGenerationMode = FrameGenerationMode.INDEPENDENT,
+        image_model: ImageGenerationModel = ImageGenerationModel.STABLE_DIFFUSION,
+        embedding_model: EmbeddingModel = EmbeddingModel.CLIP
+    ) -> List[Dict]:
         """
         Search for videos matching the query
+        
+        Args:
+            query: The text query to search for
+            max_frames: Maximum number of frames to generate
+            top_k: Number of results to return
+            frame_mode: Mode for frame generation (independent or continuous)
+            image_model: Model for image generation
+            embedding_model: Model for embedding generation
+            
+        Returns:
+            List of matching videos with scores
         """
         if not self.indexed or not self.videos:
             logger.warning("No videos indexed, cannot perform search")
@@ -156,13 +175,24 @@ class VideoService:
         # Create debug session if debug mode is enabled
         session_id = ""
         if DEBUG_MODE:
-            session_id = DebugLogger.log_search_query(query, max_frames, top_k)
+            session_id = DebugLogger.log_search_query(
+                query, 
+                max_frames, 
+                top_k, 
+                frame_mode=frame_mode.value,
+                image_model=image_model.value
+            )
         
         # Generate frame descriptions from the query
         frame_descriptions = await self.embedder.generate_frame_descriptions(query, max_frames, session_id)
         
-        # Generate images from frame descriptions
-        generated_images = await self.embedder.generate_images_from_descriptions(frame_descriptions, session_id)
+        # Generate images from frame descriptions using the specified model and mode
+        generated_images = await self.embedder.generate_images_from_descriptions(
+            frame_descriptions, 
+            mode=frame_mode,
+            model_type=image_model,
+            session_id=session_id
+        )
         
         # Get embeddings for generated images
         generated_embeddings = await self.embedder.embed_images(generated_images)

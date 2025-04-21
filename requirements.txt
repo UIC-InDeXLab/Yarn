@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+numpy
+opencv-python
+pillow
+openai
+transformers
+torch
+scikit-learn
+scipy
+python-dotenv
+pydantic
+fastdtw
+tqdm

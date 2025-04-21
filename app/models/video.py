@@ -1,7 +1,9 @@
+from enum import Enum
 from typing import List, Optional
+
 import numpy as np
 from pydantic import BaseModel
-from enum import Enum
+
 
 class VideoFrame:
     def __init__(self, timestamp: float, image: np.ndarray, embedding: Optional[np.ndarray] = None):
@@ -17,6 +19,7 @@ class VideoFrame:
         self.image = image
         self.embedding = embedding
 
+
 class Video:
     def __init__(self, id: str, path: str, frames: List[VideoFrame]):
         """
@@ -31,19 +34,23 @@ class Video:
         self.path = path
         self.frames = frames
 
+
 class FrameGenerationMode(str, Enum):
     """Enum for frame generation modes"""
     INDEPENDENT = "independent"  # Generate each frame independently
-    CONTINUOUS = "continuous"    # Generate frames in a continuous sequence (edit-based)
+    CONTINUOUS = "continuous"  # Generate frames in a continuous sequence (edit-based)
+
 
 class ImageGenerationModel(str, Enum):
     """Enum for image generation models"""
-    DALLE = "dalle"              # OpenAI DALL-E models
-    STABLE_DIFFUSION = "sd"      # Stable Diffusion models via Replicate
+    DALLE = "dalle"  # OpenAI DALL-E models
+    STABLE_DIFFUSION = "sd"  # Stable Diffusion models via Replicate
+
 
 class EmbeddingModel(str, Enum):
     """Enum for embedding models"""
-    CLIP = "clip"                # OpenAI CLIP model
+    CLIP = "clip"  # OpenAI CLIP model
+
 
 class SearchQuery(BaseModel):
     query: str
@@ -52,7 +59,8 @@ class SearchQuery(BaseModel):
     frame_mode: FrameGenerationMode = FrameGenerationMode.INDEPENDENT
     image_model: ImageGenerationModel = ImageGenerationModel.STABLE_DIFFUSION
     embedding_model: EmbeddingModel = EmbeddingModel.CLIP
-    
+
+
 class SearchResult(BaseModel):
     video_id: str
     distance: float

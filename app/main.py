@@ -1,10 +1,11 @@
-import os
 import logging
-from fastapi import FastAPI, Depends
+import os
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.services.video_service import VideoService
 from app.routers import search
+from app.services.video_service import VideoService
 from app.utils.config import API_TITLE, API_DESCRIPTION, API_VERSION, VIDEO_DIRECTORY
 
 # Setup logging
@@ -30,19 +31,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Initialize video service on startup
 @app.on_event("startup")
 async def startup_event():
     # Create videos directory if it doesn't exist
     os.makedirs(VIDEO_DIRECTORY, exist_ok=True)
-    
+
     # Initialize video service
     video_service = VideoService()
     await video_service.index_videos(VIDEO_DIRECTORY)
+
 
 # Include routers
 app.include_router(search.router)
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 
-from app.models.video import SearchQuery, SearchResult, FrameGenerationMode, ImageGenerationModel, EmbeddingModel
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.models.video import SearchQuery, SearchResult
 from app.services.video_service import VideoService
 
 router = APIRouter(
@@ -10,14 +11,16 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+
 async def get_video_service():
     """Dependency to get the video service instance"""
     return VideoService()
 
+
 @router.post("/", response_model=List[SearchResult])
 async def search_videos(
-    query: SearchQuery,
-    video_service: VideoService = Depends(get_video_service)
+        query: SearchQuery,
+        video_service: VideoService = Depends(get_video_service)
 ):
     """
     Search for videos matching the query text
@@ -36,20 +39,20 @@ async def search_videos(
     """
     if not query.query or len(query.query.strip()) == 0:
         raise HTTPException(status_code=400, detail="Query text cannot be empty")
-    
+
     if query.max_frames < 1 or query.max_frames > 20:
         raise HTTPException(status_code=400, detail="max_frames must be between 1 and 20")
-        
+
     if query.top_k < 1 or query.top_k > 50:
         raise HTTPException(status_code=400, detail="top_k must be between 1 and 50")
-    
+
     results = await video_service.search_videos(
-        query.query, 
+        query.query,
         max_frames=query.max_frames,
         top_k=query.top_k,
         frame_mode=query.frame_mode,
         image_model=query.image_model,
         embedding_model=query.embedding_model
     )
-    
+
     return results

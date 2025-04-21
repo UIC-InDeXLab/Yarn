@@ -31,7 +31,7 @@ async def search_videos(
             - top_k: Number of results to return (default: 3)
             - frame_mode: Frame generation mode (independent or continuous)
             - image_model: Image generation model (dalle or sd)
-            - embedding_model: Embedding model (clip)
+            - embedding_models: List of embedding models with weights
         video_service: Video service instance
         
     Returns:
@@ -52,7 +52,7 @@ async def search_videos(
         top_k=query.top_k,
         frame_mode=query.frame_mode,
         image_model=query.image_model,
-        embedding_model=query.embedding_model
+        embedding_models=query.embedding_models
     )
 
     return results

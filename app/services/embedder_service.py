@@ -1,13 +1,13 @@
 import logging
-from typing import List, Any
+from typing import List, Any, Dict, Optional
 
 import numpy as np
 import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
 
-from app.models.video import FrameGenerationMode, ImageGenerationModel
-from app.services.foundation_models import ModelFactory, ImageGenerator
+from app.models.video import FrameGenerationMode, ImageGenerationModel, EmbeddingModel, EmbedderConfig
+from app.services.foundation_models import ModelFactory, ImageGenerator, Embedder
 from app.utils.config import DEBUG_MODE, OPENAI_API_KEY
 from app.utils.debug import DebugLogger
 
@@ -24,78 +24,71 @@ class EmbedderService:
         return cls._instance
 
     def _init_services(self):
-        """Initialize models"""
-        # Initialize CLIP model for embeddings
-        try:
-            self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-            self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-            self.clip_model.to(self.device)
-            logger.info(f"CLIP model loaded successfully. Using device: {self.device}")
-        except Exception as e:
-            logger.error(f"Error loading CLIP model: {str(e)}")
-            self.clip_model = None
-            self.clip_processor = None
+        """Initialize predefined embedder models"""
+        self.embedders = {
+            EmbeddingModel.CLIP.value: ModelFactory.create_embedder(EmbeddingModel.CLIP),
+            EmbeddingModel.RESNET50.value: ModelFactory.create_embedder(EmbeddingModel.RESNET50),
+            EmbeddingModel.EFFICIENTNET.value: ModelFactory.create_embedder(EmbeddingModel.EFFICIENTNET),
+            EmbeddingModel.VIT.value: ModelFactory.create_embedder(EmbeddingModel.VIT),
+            EmbeddingModel.SWIN.value: ModelFactory.create_embedder(EmbeddingModel.SWIN),
+            EmbeddingModel.MOBILENET.value: ModelFactory.create_embedder(EmbeddingModel.MOBILENET),
+        }
 
     def get_image_generator(self, model_type: ImageGenerationModel) -> ImageGenerator:
         """Get an image generator based on the model type"""
         return ModelFactory.create_image_generator(model_type)
+        
+    def get_embedder(self, model_type: EmbeddingModel) -> Embedder:
+        """Get an embedder based on the model type"""
+        model_name = model_type.value
+        if model_name not in self.embedders:
+            logger.warning(f"Embedder {model_name} not found in predefined models. Using CLIP instead.")
+            return self.embedders[EmbeddingModel.CLIP.value]
+        return self.embedders[model_name]
 
-    async def embed_images(self, images: List[Any]) -> List[np.ndarray]:
+    async def embed_images(self, images: List[Any], model_type: Optional[EmbeddingModel] = None) -> List[np.ndarray]:
         """
-        Generate embeddings for a list of images using CLIP
+        Generate embeddings for a list of images using a specific embedder
         
         Args:
             images: List of images (can be PIL Images, numpy arrays or file paths)
+            model_type: The embedder model to use (defaults to CLIP if not specified)
             
         Returns:
             List of embedding vectors
         """
-        if not self.clip_model or not self.clip_processor:
-            logger.error("CLIP model not initialized")
-            return [np.zeros(512) for _ in images]  # Return dummy embeddings
-
-        embeddings = []
-        batch_size = 16  # Process images in batches to avoid OOM
-
-        for i in range(0, len(images), batch_size):
-            batch = images[i:i + batch_size]
-            processed_batch = []
-
-            for img in batch:
-                if isinstance(img, str):  # File path
-                    try:
-                        pil_img = Image.open(img).convert("RGB")
-                        processed_batch.append(pil_img)
-                    except Exception as e:
-                        logger.error(f"Error loading image from {img}: {str(e)}")
-                        processed_batch.append(Image.new("RGB", (224, 224)))
-                elif isinstance(img, np.ndarray):  # Numpy array
-                    try:
-                        pil_img = Image.fromarray(img).convert("RGB")
-                        processed_batch.append(pil_img)
-                    except Exception as e:
-                        logger.error(f"Error converting numpy array to PIL Image: {str(e)}")
-                        processed_batch.append(Image.new("RGB", (224, 224)))
-                else:  # Assume it's already a PIL Image or compatible
-                    processed_batch.append(img)
-
-            try:
-                with torch.no_grad():
-                    inputs = self.clip_processor(images=processed_batch, return_tensors="pt").to(self.device)
-                    image_features = self.clip_model.get_image_features(**inputs)
-                    # Normalize embeddings
-                    image_features = image_features / image_features.norm(dim=1, keepdim=True)
-                    # Convert to numpy and move to CPU
-                    batch_embeddings = image_features.cpu().numpy()
-                    embeddings.extend(batch_embeddings)
-            except Exception as e:
-                logger.error(f"Error generating embeddings: {str(e)}")
-                # Add zero embeddings for the failed batch
-                dummy_embedding = np.zeros(512)
-                embeddings.extend([dummy_embedding] * len(processed_batch))
-
-        return embeddings
+        if model_type is None:
+            model_type = EmbeddingModel.CLIP
+            
+        embedder = self.get_embedder(model_type)
+        return await embedder.embed_images(images)
+    
+    async def embed_images_with_multiple_models(
+        self, 
+        images: List[Any], 
+        embedder_configs: List[EmbedderConfig]
+    ) -> Dict[str, List[np.ndarray]]:
+        """
+        Generate embeddings for a list of images using multiple embedders
+        
+        Args:
+            images: List of images (can be PIL Images, numpy arrays or file paths)
+            embedder_configs: List of embedder configurations to use
+            
+        Returns:
+            Dictionary mapping embedder name to list of embedding vectors
+        """
+        if not embedder_configs:
+            embedder_configs = [EmbedderConfig(model=EmbeddingModel.CLIP, weight=1.0)]
+            
+        results = {}
+        
+        for config in embedder_configs:
+            embedder = self.get_embedder(config.model)
+            embeddings = await embedder.embed_images(images)
+            results[config.model.value] = embeddings
+            
+        return results
 
     async def generate_frame_descriptions(self, query: str, max_frames: int = 5, session_id: str = "") -> List[str]:
         """

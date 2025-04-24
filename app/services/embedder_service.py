@@ -2,9 +2,6 @@ import logging
 from typing import List, Any, Dict, Optional
 
 import numpy as np
-import torch
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
 
 from app.models.video import FrameGenerationMode, ImageGenerationModel, EmbeddingModel, EmbedderConfig
 from app.services.foundation_models import ModelFactory, ImageGenerator, Embedder
@@ -27,17 +24,18 @@ class EmbedderService:
         """Initialize predefined embedder models"""
         self.embedders = {
             EmbeddingModel.CLIP.value: ModelFactory.create_embedder(EmbeddingModel.CLIP),
-            EmbeddingModel.RESNET50.value: ModelFactory.create_embedder(EmbeddingModel.RESNET50),
-            EmbeddingModel.EFFICIENTNET.value: ModelFactory.create_embedder(EmbeddingModel.EFFICIENTNET),
-            EmbeddingModel.VIT.value: ModelFactory.create_embedder(EmbeddingModel.VIT),
-            EmbeddingModel.SWIN.value: ModelFactory.create_embedder(EmbeddingModel.SWIN),
-            EmbeddingModel.MOBILENET.value: ModelFactory.create_embedder(EmbeddingModel.MOBILENET),
+            EmbeddingModel.DINO.value: ModelFactory.create_embedder(EmbeddingModel.DINO),
+            # EmbeddingModel.RESNET50.value: ModelFactory.create_embedder(EmbeddingModel.RESNET50),
+            # EmbeddingModel.EFFICIENTNET.value: ModelFactory.create_embedder(EmbeddingModel.EFFICIENTNET),
+            # EmbeddingModel.VIT.value: ModelFactory.create_embedder(EmbeddingModel.VIT),
+            # EmbeddingModel.SWIN.value: ModelFactory.create_embedder(EmbeddingModel.SWIN),
+            # EmbeddingModel.MOBILENET.value: ModelFactory.create_embedder(EmbeddingModel.MOBILENET),
         }
 
     def get_image_generator(self, model_type: ImageGenerationModel) -> ImageGenerator:
         """Get an image generator based on the model type"""
         return ModelFactory.create_image_generator(model_type)
-        
+
     def get_embedder(self, model_type: EmbeddingModel) -> Embedder:
         """Get an embedder based on the model type"""
         model_name = model_type.value
@@ -59,14 +57,14 @@ class EmbedderService:
         """
         if model_type is None:
             model_type = EmbeddingModel.CLIP
-            
+
         embedder = self.get_embedder(model_type)
         return await embedder.embed_images(images)
-    
+
     async def embed_images_with_multiple_models(
-        self, 
-        images: List[Any], 
-        embedder_configs: List[EmbedderConfig]
+            self,
+            images: List[Any],
+            embedder_configs: List[EmbedderConfig]
     ) -> Dict[str, List[np.ndarray]]:
         """
         Generate embeddings for a list of images using multiple embedders
@@ -78,19 +76,16 @@ class EmbedderService:
         Returns:
             Dictionary mapping embedder name to list of embedding vectors
         """
-        if not embedder_configs:
-            embedder_configs = [EmbedderConfig(model=EmbeddingModel.CLIP, weight=1.0)]
-            
         results = {}
-        
+
         for config in embedder_configs:
             embedder = self.get_embedder(config.model)
             embeddings = await embedder.embed_images(images)
             results[config.model.value] = embeddings
-            
+
         return results
 
-    async def generate_frame_descriptions(self, query: str, max_frames: int = 5, session_id: str = "") -> List[str]:
+    async def generate_frame_descriptions(self, query: str, max_frames: int = 5, min_frames: int = 3, session_id: str = "") -> List[str]:
         """
         Generate frame descriptions from a text query using GPT-4o
         
@@ -118,9 +113,11 @@ class EmbedderService:
             )
 
             user_prompt = (
-                f"Convert the following query into a sequence of {max_frames} or fewer visual frames. "
+                f"Convert the following query into a sequence of {max_frames} or fewer visual frames, at least include {min_frames} frames. "
                 f"Each frame should capture essential visual elements only. "
                 f"Be precise and focus solely on elements explicitly mentioned in the query. "
+                f"In the first frame, include the most important visual elements, in the rest, just describe the elements that need to be added or changed to the previous frame."
+                f"Note that, for some actions, you might need more than one frame to describe the action. do not hesitate to add more frames to show the actions."
                 f"Avoid adding invented details that aren't directly implied by the query.\n\n"
                 f"Query: {query}\n\n"
                 f"Format your response as a numbered list of frame descriptions, with one description per frame."

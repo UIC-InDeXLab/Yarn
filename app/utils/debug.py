@@ -30,6 +30,7 @@ class DebugLogger:
     def log_search_query(
             query: str,
             max_frames: int,
+            min_frames: int,
             top_k: int,
             frame_mode: str = "independent",
             image_model: str = "sd"
@@ -63,6 +64,7 @@ class DebugLogger:
             "datetime": datetime.datetime.now().isoformat(),
             "query": query,
             "max_frames": max_frames,
+            "min_frames": min_frames,
             "top_k": top_k,
             "frame_mode": frame_mode,
             "image_model": image_model
@@ -160,7 +162,7 @@ class DebugLogger:
         logger.info(f"Debug: Saved {len(images)} generated frames to {frames_dir}")
 
     @staticmethod
-    def log_results(session_id: str, results: List[Dict[str, Any]]) -> None:
+    def log_results(session_id: str, results: List[str]) -> None:
         """
         Log search results
         

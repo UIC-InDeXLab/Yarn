@@ -1,14 +1,15 @@
 import glob
 import logging
 import os
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 import cv2
 import numpy as np
 from fastdtw import fastdtw
-from scipy.spatial.distance import euclidean
+from scipy.spatial.distance import cosine
 
-from app.models.video import Video, VideoFrame, FrameGenerationMode, ImageGenerationModel, EmbeddingModel, EmbedderConfig, aggregate_rankings
+from app.models.video import Video, VideoFrame, FrameGenerationMode, ImageGenerationModel, EmbeddingModel, \
+    EmbedderConfig, aggregate_rankings
 from app.services.embedder_service import EmbedderService
 from app.utils.config import DEBUG_MODE
 from app.utils.debug import DebugLogger
@@ -59,7 +60,7 @@ class VideoService:
                         EmbedderConfig(model=EmbeddingModel.CLIP, weight=1.0),
                         EmbedderConfig(model=EmbeddingModel.DINO, weight=1.0)
                     ]
-                    
+
                     embeddings_dict = await self.embedder.embed_images_with_multiple_models(
                         [frame.image for frame in frames],
                         embedder_configs
@@ -160,6 +161,7 @@ class VideoService:
             self,
             query: str,
             max_frames: int = 5,
+            min_frames: int = 3,
             top_k: int = 3,
             frame_mode: FrameGenerationMode = FrameGenerationMode.INDEPENDENT,
             image_model: ImageGenerationModel = ImageGenerationModel.STABLE_DIFFUSION,
@@ -171,6 +173,7 @@ class VideoService:
         Args:
             query: The text query to search for
             max_frames: Maximum number of frames to generate
+            min_frames: Minimum number of frames to generate
             top_k: Number of results to return
             frame_mode: Mode for frame generation (independent or continuous)
             image_model: Model for image generation
@@ -182,7 +185,7 @@ class VideoService:
         if not self.indexed or not self.videos:
             logger.warning("No videos indexed, cannot perform search")
             return []
-            
+
         # Use default embedder if none specified
         if embedding_models is None or len(embedding_models) == 0:
             embedding_models = [EmbedderConfig(model=EmbeddingModel.CLIP, weight=1.0)]
@@ -193,13 +196,14 @@ class VideoService:
             session_id = DebugLogger.log_search_query(
                 query,
                 max_frames,
+                min_frames,
                 top_k,
                 frame_mode=frame_mode.value,
                 image_model=image_model.value
             )
 
         # Generate frame descriptions from the query
-        frame_descriptions = await self.embedder.generate_frame_descriptions(query, max_frames, session_id)
+        frame_descriptions = await self.embedder.generate_frame_descriptions(query, max_frames=max_frames, min_frames=3, session_id=session_id)
 
         # Generate images from frame descriptions using the specified model and mode
         generated_images = await self.embedder.generate_images_from_descriptions(
@@ -218,50 +222,36 @@ class VideoService:
         # Find the best matching videos using each embedder
         all_ranker_results = []
         weights = []
-        
+
         for config in embedding_models:
             embedder_name = config.model.value
             weight = config.weight
-            
+
             if embedder_name not in generated_embeddings_dict:
                 logger.warning(f"No embeddings generated for {embedder_name}, skipping")
                 continue
-                
+
             generated_embeddings = generated_embeddings_dict[embedder_name]
-            
+
             # Run search with this embedder
             results = await self._search_with_embedder(
                 video_frames_dict=self.videos,
                 generated_embeddings=generated_embeddings,
                 embedder_name=embedder_name
             )
-            
+
             all_ranker_results.append(results)
             weights.append(weight)
 
         # If we have multiple rankers, aggregate their results
-        if len(all_ranker_results) > 1:
-            aggregated_results = aggregate_rankings(all_ranker_results, weights, top_k)
-            
-            # Log results in debug mode
-            if DEBUG_MODE and session_id:
-                DebugLogger.log_results(session_id, aggregated_results)
-                
-            return aggregated_results
-        elif len(all_ranker_results) == 1:
-            # Just return the results from the single embedder
-            results = all_ranker_results[0]
-            top_results = results[:top_k]
-            
-            # Log results in debug mode
-            if DEBUG_MODE and session_id:
-                DebugLogger.log_results(session_id, top_results)
-                
-            return top_results
-        else:
-            logger.warning("No valid embedders found for search")
-            return []
-            
+        aggregated_results = aggregate_rankings(all_ranker_results, weights, top_k)
+
+        # Log results in debug mode
+        if DEBUG_MODE and session_id:
+            DebugLogger.log_results(session_id, aggregated_results)
+
+        return aggregated_results
+
     async def _search_with_embedder(
             self,
             video_frames_dict: Dict[str, Video],
@@ -283,15 +273,15 @@ class VideoService:
 
         for video_id, video in video_frames_dict.items():
             # Get the embeddings sequence for this video using the specified embedder
-            video_embeddings = [frame.embeddings.get(embedder_name) for frame in video.frames 
-                               if embedder_name in frame.embeddings]
-                    
+            video_embeddings = [frame.embeddings.get(embedder_name) for frame in video.frames
+                                if embedder_name in frame.embeddings]
+
             if not video_embeddings:
                 continue
 
             # Calculate DTW distance
             try:
-                distance, _ = fastdtw(np.array(generated_embeddings), np.array(video_embeddings), dist=euclidean)
+                distance, _ = fastdtw(np.array(generated_embeddings), np.array(video_embeddings), dist=cosine)
 
                 # Normalize by the number of frames
                 normalized_distance = distance / (len(video_embeddings) + len(generated_embeddings))
@@ -307,5 +297,5 @@ class VideoService:
 
         # Sort by score (descending)
         results.sort(key=lambda x: x["score"], reverse=True)
-        
+
         return results

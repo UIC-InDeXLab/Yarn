@@ -2,7 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.models.video import SearchQuery, SearchResult
+from app.models.video import SearchQuery
 from app.services.video_service import VideoService
 
 router = APIRouter(
@@ -17,7 +17,7 @@ async def get_video_service():
     return VideoService()
 
 
-@router.post("/", response_model=List[SearchResult])
+@router.post("/", response_model=List[str])
 async def search_videos(
         query: SearchQuery,
         video_service: VideoService = Depends(get_video_service)
@@ -30,7 +30,7 @@ async def search_videos(
             - max_frames: Maximum number of frames to generate (default: 5)
             - top_k: Number of results to return (default: 3)
             - frame_mode: Frame generation mode (independent or continuous)
-            - image_model: Image generation model (dalle or sd)
+            - image_model: Image generation model (sd)
             - embedding_models: List of embedding models with weights
         video_service: Video service instance
         

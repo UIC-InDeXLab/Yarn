@@ -68,7 +68,7 @@ python run.py
 python test_client.py --query "A person walking on the beach"
 
 # Using DALL-E for image generation
-python test_client.py --query "A person walking on the beach" --image-model dalle
+python test_client.py --query "A person walking on the beach" --image-model sd
 
 # Using continuous frame generation mode for more coherent sequences
 python test_client.py --query "A person walking on the beach" --frame-mode continuous

@@ -24,7 +24,7 @@ def search_videos(
         max_frames: Maximum number of frames to generate
         top_k: Number of results to return
         frame_mode: Frame generation mode ("independent" or "continuous")
-        image_model: Image generation model ("sd" for Stable Diffusion or "dalle" for DALL-E)
+        image_model: Image generation model ("sd" for Stable Diffusion)
         api_url: Base URL of the Yarn API
         
     Returns:
@@ -70,9 +70,9 @@ def main():
     parser.add_argument(
         "--image-model",
         type=str,
-        choices=["sd", "dalle"],
+        choices=["sd"],
         default="sd",
-        help="Image generation model (sd for Stable Diffusion, dalle for DALL-E)"
+        help="Image generation model (sd for Stable Diffusion)"
     )
     parser.add_argument("--api-url", type=str, default="http://localhost:8000", help="Base URL of the Yarn API")
     parser.add_argument("--output", type=str, help="Output file to save results (JSON format)")

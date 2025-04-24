@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional, Dict, Union
+from typing import List, Dict
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -9,11 +9,11 @@ class EmbeddingModel(str, Enum):
     """Enum for embedding models"""
     CLIP = "vit_large_patch14_clip_336.openai_ft_in12k_in1k"  # OpenAI CLIP model
     DINO = "vit_large_patch14_reg4_dinov2.lvd142m"
-    MOBILENET = "mobilenet"  # MobileNet v2 model
-    RESNET50 = "resnet50"  # ResNet-50 model
-    EFFICIENTNET = "efficientnet_b0"  # EfficientNet B0
-    VIT = "vit_base_patch16_224"  # Vision Transformer
-    SWIN = "swin_tiny_patch4_window7_224"  # Swin Transformer
+    # MOBILENET = "mobilenet"  # MobileNet v2 model
+    # RESNET50 = "resnet50"  # ResNet-50 model
+    # EFFICIENTNET = "efficientnet_b0"  # EfficientNet B0
+    # VIT = "vit_base_patch16_224"  # Vision Transformer
+    # SWIN = "swin_tiny_patch4_window7_224"  # Swin Transformer
 
 
 class EmbedderConfig(BaseModel):
@@ -59,7 +59,6 @@ class FrameGenerationMode(str, Enum):
 
 class ImageGenerationModel(str, Enum):
     """Enum for image generation models"""
-    DALLE = "dalle"  # OpenAI DALL-E models
     STABLE_DIFFUSION = "sd"  # Stable Diffusion models via Replicate
 
 
@@ -74,13 +73,7 @@ class SearchQuery(BaseModel):
     )
 
 
-class SearchResult(BaseModel):
-    video_id: str
-    distance: float
-    score: float
-
-
-def aggregate_rankings(rankers_results: List[List[Dict]], weights: List[float], k: int) -> List[Dict]:
+def aggregate_rankings(rankers_results: List[List[Dict]], weights: List[float], k: int) -> List[str]:
     """
     Aggregate rankings from multiple rankers based on rank position
     
@@ -93,36 +86,12 @@ def aggregate_rankings(rankers_results: List[List[Dict]], weights: List[float], 
         Aggregated ranked results
     """
     scores = {}
-
     for i, R_i in enumerate(rankers_results):
         for j, result in enumerate(R_i):
-            video_id = result["video_id"]
-            if video_id not in scores:
-                scores[video_id] = {
-                    "video_id": video_id,
-                    "score": 0,
-                    "distance": 0,
-                    "original_scores": {}
-                }
+            if result["video_id"] not in scores:
+                scores[result["video_id"]] = 0
+            scores[result["video_id"]] += weights[i] * (1 / (j + 1))
 
-            # Store the original score and distance
-            scores[video_id]["original_scores"][i] = result["score"]
-
-            # Use rank position (j+1) directly instead of score
-            # The weight affects the importance of this ranker, not the score itself
-            scores[video_id]["score"] += weights[i] * (1.0 / (j + 1))
-
-    # Convert dictionary to list and sort by score
-    ranked_results = list(scores.values())
-    ranked_results.sort(key=lambda x: x["score"], reverse=True)
-
-    # Compute an appropriate distance based on the inverse of the aggregated score
-    for result in ranked_results:
-        # Normalize the score to range [0, 1]
-        max_score = ranked_results[0]["score"] if ranked_results else 1
-        normalized_score = result["score"] / max_score if max_score > 0 else 0
-
-        # Convert to a "distance" (smaller is better)
-        result["distance"] = 1.0 - normalized_score
+    ranked_results = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
 
     return ranked_results[:k]

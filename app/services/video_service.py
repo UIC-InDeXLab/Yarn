@@ -23,10 +23,80 @@ class VideoService:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(VideoService, cls).__new__(cls)
+            # In-memory store of videos and embeddings
             cls._instance.videos = {}
+            # Embedder service for indexing new content
             cls._instance.embedder = EmbedderService()
+            # Directory for persistent index cache
+            import os
+            cls._instance.index_dir = os.getenv("VIDEO_INDEX_DIR", "./video_index")
+            os.makedirs(cls._instance.index_dir, exist_ok=True)
+            # Load existing index cache if available
             cls._instance.indexed = False
+            cls._instance._load_index()
         return cls._instance
+    def _load_index(self) -> None:
+        """
+        Load video embeddings and frame metadata from disk cache
+        """
+        import pickle
+        try:
+            loaded = 0
+            for fname in os.listdir(self.index_dir):
+                if not fname.endswith('.pkl'):
+                    continue
+                path = os.path.join(self.index_dir, fname)
+                with open(path, 'rb') as pf:
+                    data = pickle.load(pf)
+                vid = data.get('id') or os.path.splitext(fname)[0]
+                vpath = data.get('path', '')
+                timestamps = data.get('timestamps', [])
+                embeddings_dict = data.get('embeddings', {})
+                # Reconstruct VideoFrame list
+                frames = []
+                for idx, ts in enumerate(timestamps):
+                    frame = VideoFrame(timestamp=ts, image=None)
+                    frame.embeddings = {}
+                    for name, arr in embeddings_dict.items():
+                        # arr is ndarray of shape (n_frames, dim)
+                        frame.embeddings[name] = arr[idx]
+                    frames.append(frame)
+                # Recreate Video
+                self.videos[vid] = Video(id=vid, path=vpath, frames=frames)
+                loaded += 1
+            if loaded:
+                self.indexed = True
+                logger.info(f"Loaded {loaded} videos from index cache")
+        except Exception as e:
+            logger.error(f"Error loading video index cache: {e}")
+
+    def _save_index(self) -> None:
+        """
+        Save video embeddings and frame metadata to disk cache
+        """
+        import pickle
+        try:
+            for vid, video in self.videos.items():
+                # Prepare metadata
+                timestamps = [frame.timestamp for frame in video.frames]
+                embeddings_dict = {}
+                if video.frames and video.frames[0].embeddings:
+                    for name in video.frames[0].embeddings.keys():
+                        # Stack embeddings for each frame
+                        arr = np.stack([frame.embeddings.get(name) for frame in video.frames], axis=0)
+                        embeddings_dict[name] = arr
+                data = {
+                    'id': video.id,
+                    'path': video.path,
+                    'timestamps': timestamps,
+                    'embeddings': embeddings_dict
+                }
+                cache_path = os.path.join(self.index_dir, f"{vid}.pkl")
+                with open(cache_path, 'wb') as pf:
+                    pickle.dump(data, pf)
+            logger.info(f"Saved {len(self.videos)} videos to index cache")
+        except Exception as e:
+            logger.error(f"Error saving video index cache: {e}")
 
     async def index_videos(self, video_directory: str) -> None:
         """
@@ -88,6 +158,8 @@ class VideoService:
 
         self.indexed = True
         logger.info(f"Finished indexing {len(self.videos)} videos")
+        # Persist index cache to disk
+        self._save_index()
 
     async def _extract_key_frames(self, video_path: str, max_frames: int = 30) -> List[VideoFrame]:
         """

@@ -20,3 +20,4 @@ requests
 diffusers
 accelerate
 sentencepiece
+protobuf

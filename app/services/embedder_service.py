@@ -4,7 +4,9 @@ from typing import List, Any, Dict, Optional
 import numpy as np
 
 from app.models.video import FrameGenerationMode, ImageGenerationModel, EmbeddingModel, EmbedderConfig
-from app.services.foundation_models import ModelFactory, ImageGenerator, Embedder
+from app.services.model_factory import ModelFactory
+from app.services.image_generator import ImageGenerator
+from app.services.embedders import Embedder
 from app.utils.config import DEBUG_MODE, OPENAI_API_KEY
 from app.utils.debug import DebugLogger
 

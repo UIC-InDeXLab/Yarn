@@ -100,7 +100,7 @@ Yarn implements a flexible foundation model framework that allows you to choose 
 POST /api/search/
 ```
 
-Request body:
+Request body for image-based generation:
 ```json
 {
   "query": "A person running on the beach at sunset",
@@ -108,7 +108,19 @@ Request body:
   "top_k": 3,
   "frame_mode": "independent",
   "image_model": "sd",
-  "embedding_model": "clip"
+  "embedding_models": [{ "model": "vit_large_patch14_clip_336.openai_ft_in12k_in1k", "weight": 1.0 }]
+}
+```
+
+Request body for video-based generation:
+```json
+{
+  "query": "A person walking through a door",
+  "num_frames": 10,
+  "top_k": 3,
+  "image_model": "video",
+  "video_model_id": "Lightricks/LTX-Video",
+  "embedding_models": [{ "model": "vit_large_patch14_clip_336.openai_ft_in12k_in1k", "weight": 1.0 }]
 }
 ```
 

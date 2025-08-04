@@ -3,8 +3,9 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
-from app.routers import search
+from app.routers import search, preview
 from app.services.video_service import VideoService
 from app.utils.config import API_TITLE, API_DESCRIPTION, API_VERSION, VIDEO_DIRECTORY
 
@@ -31,6 +32,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files directory
+app.mount("/videos", StaticFiles(directory=VIDEO_DIRECTORY), name="videos")
+
 
 # Initialize video service on startup
 @app.on_event("startup")
@@ -45,6 +49,7 @@ async def startup_event():
 
 # Include routers
 app.include_router(search.router)
+app.include_router(preview.router)
 
 if __name__ == "__main__":
     import uvicorn

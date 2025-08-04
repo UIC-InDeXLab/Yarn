@@ -14,6 +14,8 @@ def search_videos(
         top_k=3,
         frame_mode="independent",
         image_model="sd",
+        num_frames=None,
+        video_model_id="Lightricks/LTX-Video",
         api_url="http://localhost:8000"
 ):
     """
@@ -37,9 +39,13 @@ def search_videos(
         "max_frames": max_frames,
         "top_k": top_k,
         "frame_mode": frame_mode,
-        "image_model": image_model,
-        "embedding_model": "clip"
+        "image_model": image_model
     }
+    # Include video-specific parameters if provided
+    if num_frames is not None:
+        payload["num_frames"] = num_frames
+    if video_model_id:
+        payload["video_model_id"] = video_model_id
 
     headers = {
         "Content-Type": "application/json"
@@ -70,9 +76,20 @@ def main():
     parser.add_argument(
         "--image-model",
         type=str,
-        choices=["sd"],
+        choices=["sd", "video"],
         default="sd",
-        help="Image generation model (sd for Stable Diffusion)"
+        help="Image or video generation model (sd for Stable Diffusion, video for LTX-Video)"
+    )
+    parser.add_argument(
+        "--num-frames",
+        type=int,
+        help="Number of frames for video generation (5-15)"
+    )
+    parser.add_argument(
+        "--video-model-id",
+        type=str,
+        default="Lightricks/LTX-Video",
+        help="Hugging Face model ID for video generation"
     )
     parser.add_argument("--api-url", type=str, default="http://localhost:8000", help="Base URL of the Yarn API")
     parser.add_argument("--output", type=str, help="Output file to save results (JSON format)")
@@ -89,6 +106,8 @@ def main():
         top_k=args.top_k,
         frame_mode=args.frame_mode,
         image_model=args.image_model,
+        num_frames=args.num_frames,
+        video_model_id=args.video_model_id,
         api_url=args.api_url
     )
 

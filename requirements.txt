@@ -21,3 +21,6 @@ diffusers
 accelerate
 sentencepiece
 protobuf
+imageio-ffmpeg
+torchvision
+jinja2

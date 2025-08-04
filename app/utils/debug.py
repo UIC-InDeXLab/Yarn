@@ -107,8 +107,6 @@ class DebugLogger:
     def save_generated_frames(
             session_id: str,
             images: List[np.ndarray],
-            descriptions: List[str],
-            model_name: str = "unknown"
     ) -> None:
         """
         Save generated frames as images
@@ -126,38 +124,18 @@ class DebugLogger:
         frames_dir = DebugLogger.get_frames_dir(session_id)
         os.makedirs(frames_dir, exist_ok=True)
 
-        # Save metadata
-        metadata = {
-            "timestamp": time.time(),
-            "datetime": datetime.datetime.now().isoformat(),
-            "count": len(images),
-            "model": model_name,
-            "files": []
-        }
-
         # Save each image
-        for i, (img_array, desc) in enumerate(zip(images, descriptions)):
+        for i, img_array in enumerate(images):
             # Create a truncated description for filename (first 30 chars)
-            desc_short = "".join(c if c.isalnum() else "_" for c in desc[:30])
-            filename = f"frame_{i + 1:02d}_{model_name}_{desc_short}.jpg"
+            filename = f"frame_{i + 1:02d}.jpg"
             file_path = os.path.join(frames_dir, filename)
 
             # Convert numpy array to PIL Image and save
             try:
                 img = Image.fromarray(img_array)
                 img.save(file_path)
-                metadata["files"].append({
-                    "index": i,
-                    "filename": filename,
-                    "description": desc,
-                    "model": model_name
-                })
             except Exception as e:
                 logger.error(f"Debug: Failed to save frame image: {str(e)}")
-
-        # Save metadata
-        with open(os.path.join(frames_dir, "metadata.json"), 'w') as f:
-            json.dump(metadata, f, indent=2)
 
         logger.info(f"Debug: Saved {len(images)} generated frames to {frames_dir}")
 

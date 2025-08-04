@@ -1,7 +1,7 @@
 import logging
 
 from app.models.video import ImageGenerationModel
-from app.services.image_generator import ImageGenerator, StableDiffusionGenerator
+from app.services.image_generator import ImageGenerator, Pix2PixImageGenerator
 from app.services.embedders import Embedder, ClipEmbedder, TimmEmbedder
 
 logger = logging.getLogger(__name__)
@@ -13,11 +13,7 @@ class ModelFactory:
     @staticmethod
     def create_image_generator(model_type: ImageGenerationModel) -> ImageGenerator:
         """Create an image generator based on the model type"""
-        if model_type == ImageGenerationModel.STABLE_DIFFUSION:
-            return StableDiffusionGenerator()
-        else:
-            logger.warning(f"Unknown image generation model: {model_type}, using Stable Diffusion")
-            return StableDiffusionGenerator()
+        return Pix2PixImageGenerator()
 
     @staticmethod
     def create_embedder(model_type) -> Embedder:

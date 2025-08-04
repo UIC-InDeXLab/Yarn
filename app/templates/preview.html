@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 2em;
+        }
+        h1 {
+            text-align: center;
+        }
+        .query {
+            text-align: center;
+            font-size: 1.2em;
+            margin-bottom: 2em;
+        }
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1em;
+        }
+        .grid-item {
+            border: 1px solid #ccc;
+            padding: 1em;
+            text-align: center;
+        }
+        .grid-item video {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Search Results</h1>
+    <div class="query">
+        <strong>Query:</strong> {{ query }}
+    </div>
+    <div class="grid-container">
+        {% for video in results %}
+        <div class="grid-item">
+            <h3>{{ video.video_id }}</h3>
+            <video controls>
+                <source src="{{ video.video_path }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

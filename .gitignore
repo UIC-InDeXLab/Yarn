@@ -9,3 +9,5 @@ volumes/**
 data/**
 datasets_info/**
 videos/**
+video_index/**
+video_index_old/**

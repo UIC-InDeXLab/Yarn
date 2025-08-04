@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -59,18 +59,36 @@ class FrameGenerationMode(str, Enum):
 
 class ImageGenerationModel(str, Enum):
     """Enum for image generation models"""
-    STABLE_DIFFUSION = "sd"  # Stable Diffusion models via Replicate
+    DEFAULT = "default"
+    VIDEO = "video"  # Video generation model via Lightricks/LTX-Video
 
 
 class SearchQuery(BaseModel):
     query: str
     max_frames: int = 5
+    num_frames: Optional[int] = Field(
+        None,
+        description="Number of frames for video generation",
+    )
     top_k: int = 3
     frame_mode: FrameGenerationMode = FrameGenerationMode.INDEPENDENT
-    image_model: ImageGenerationModel = ImageGenerationModel.STABLE_DIFFUSION
+    image_model: ImageGenerationModel = ImageGenerationModel.DEFAULT
+    video_model_id: str = Field(
+        "Lightricks/LTX-Video",
+        description="Hugging Face model ID for video generation"
+    )
     embedding_models: List[EmbedderConfig] = Field(
         default_factory=lambda: [EmbedderConfig(model=EmbeddingModel.CLIP, weight=1.0)]
     )
+    lambda_param: float = Field(
+        0.5,
+        description="Weight for combining contextual and action distances (0.0 to 1.0)"
+    )
+
+
+class SearchResponse(BaseModel):
+    results: List[str]
+    preview_url: str
 
 
 def aggregate_rankings(rankers_results: List[List[Dict]], weights: List[float], k: int) -> List[str]:

@@ -87,7 +87,8 @@ class EmbedderService:
 
         return results
 
-    async def generate_frame_descriptions(self, query: str, max_frames: int = 5, min_frames: int = 3, session_id: str = "") -> List[str]:
+    async def generate_frame_descriptions(self, query: str, max_frames: int = 5, min_frames: int = 3,
+                                          session_id: str = "") -> List[str]:
         """
         Generate frame descriptions from a text query using GPT-4o
         
@@ -118,11 +119,11 @@ class EmbedderService:
                 f"Convert the following query into a sequence of {max_frames} or fewer visual frames, at least include {min_frames} frames. "
                 f"Each frame should capture essential visual elements only. "
                 f"Be precise and focus solely on elements explicitly mentioned in the query. "
-                f"In the first frame, include the most important visual elements, in the rest, just describe the elements that need to be added or changed to the previous frame."
+                f"In each frame, you should describe everything in detail, since frames are being generated independently, you should remention everything that you have mentioned earlier if you need it, do not assume that you have information about previous frames"
                 f"Note that, for some actions, you might need more than one frame to describe the action. do not hesitate to add more frames to show the actions."
                 f"Avoid adding invented details that aren't directly implied by the query.\n\n"
                 f"Query: {query}\n\n"
-                f"Format your response as a numbered list of frame descriptions, with one description per frame."
+                f"Format your response as a numbered list of frame descriptions (like 1. 2. 3. etc.), with one description per frame."
             )
 
             response = client.chat.completions.create(
@@ -174,7 +175,7 @@ class EmbedderService:
             self,
             descriptions: List[str],
             mode: FrameGenerationMode = FrameGenerationMode.INDEPENDENT,
-            model_type: ImageGenerationModel = ImageGenerationModel.STABLE_DIFFUSION,
+            model_type: ImageGenerationModel = ImageGenerationModel.DEFAULT,
             session_id: str = ""
     ) -> List[np.ndarray]:
         """
@@ -201,6 +202,6 @@ class EmbedderService:
 
         # Save generated images in debug mode
         if DEBUG_MODE and session_id and images:
-            DebugLogger.save_generated_frames(session_id, images, descriptions, model_type.value)
+            DebugLogger.save_generated_frames(session_id, images)
 
         return images
